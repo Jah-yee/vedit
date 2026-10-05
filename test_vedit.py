@@ -16,6 +16,16 @@ def duration(path):
     return float(out.stdout)
 
 
+def streams(path):
+    """Return the stream types of a file, for example ['video', 'audio']."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type",
+         "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True, check=True,
+    )
+    return out.stdout.split()
+
+
 class VeditTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -55,6 +65,17 @@ class VeditTest(unittest.TestCase):
         out = self.dir / "c.mp4"
         vedit.main(["compress", str(self.clip), "-o", str(out)])
         self.assertTrue(out.stat().st_size > 0)
+
+    def test_audio(self):
+        out = self.dir / "a.mp3"
+        vedit.main(["audio", str(self.clip), "-o", str(out)])
+        self.assertEqual(streams(out), ["audio"])
+        self.assertAlmostEqual(duration(out), 4, delta=0.3)
+
+    def test_mute(self):
+        out = self.dir / "m.mp4"
+        vedit.main(["mute", str(self.clip), "-o", str(out)])
+        self.assertEqual(streams(out), ["video"])
 
     def test_title_joins_with_clip(self):
         card = self.dir / "card.mp4"

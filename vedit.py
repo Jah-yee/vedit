@@ -122,6 +122,19 @@ def cmd_compress(a):
     )
 
 
+def cmd_audio(a):
+    src = check_input(a.input)
+    out = Path(a.output) if a.output else default_out(src, "audio", ".mp3")
+    # ffmpeg picks the audio format from the output extension: .mp3, .wav, .m4a, .flac
+    run_ffmpeg(["-i", str(src), "-vn"], out, a.force)
+
+
+def cmd_mute(a):
+    src = check_input(a.input)
+    out = Path(a.output) if a.output else default_out(src, "mute")
+    run_ffmpeg(["-i", str(src), "-an", "-c:v", "copy"], out, a.force)
+
+
 def cmd_title(a):
     m = re.fullmatch(r"(\d+)x(\d+)", a.size)
     if not m or int(m[1]) % 2 or int(m[2]) % 2 or 0 in (int(m[1]), int(m[2])):
@@ -221,6 +234,12 @@ def build_parser():
     sp.add_argument("--cols", type=int, default=4)
     sp.add_argument("--rows", type=int, default=3)
     sp.add_argument("--width", type=int, default=320, help="width of each frame in pixels")
+
+    sp = add("audio", cmd_audio, "save the sound of a clip as an audio file")
+    sp.add_argument("input")
+
+    sp = add("mute", cmd_mute, "remove the sound from a clip")
+    sp.add_argument("input")
     return p
 
 
