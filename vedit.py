@@ -35,6 +35,9 @@ def run_ffmpeg(args, out, force, quiet=False):
     if subprocess.run(cmd).returncode != 0:
         fail("ffmpeg failed")
     if not quiet:
+        # ffmpeg can exit with code 0 and write nothing, for example for a time after the end.
+        if not out.exists():
+            fail(f"ffmpeg wrote no output: {out}")
         print(f"wrote {out}")
 
 
@@ -133,6 +136,12 @@ def cmd_mute(a):
     src = check_input(a.input)
     out = Path(a.output) if a.output else default_out(src, "mute")
     run_ffmpeg(["-i", str(src), "-an", "-c:v", "copy"], out, a.force)
+
+
+def cmd_frame(a):
+    src = check_input(a.input)
+    out = Path(a.output) if a.output else default_out(src, "frame", ".png")
+    run_ffmpeg(["-ss", a.time, "-i", str(src), "-frames:v", "1"], out, a.force)
 
 
 def cmd_title(a):
@@ -240,6 +249,10 @@ def build_parser():
 
     sp = add("mute", cmd_mute, "remove the sound from a clip")
     sp.add_argument("input")
+
+    sp = add("frame", cmd_frame, "save one frame of a clip as an image")
+    sp.add_argument("input")
+    sp.add_argument("time", help="time of the frame, for example 5 or 0:01:30")
     return p
 
 

@@ -77,6 +77,19 @@ class VeditTest(unittest.TestCase):
         vedit.main(["mute", str(self.clip), "-o", str(out)])
         self.assertEqual(streams(out), ["video"])
 
+    def test_frame(self):
+        out = self.dir / "f.png"
+        vedit.main(["frame", str(self.clip), "2", "-o", str(out)])
+        size = subprocess.run(
+            ["magick", "identify", "-format", "%wx%h", str(out)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        self.assertEqual(size, "320x240")
+
+    def test_frame_after_the_end(self):
+        with self.assertRaises(SystemExit):
+            vedit.main(["frame", str(self.clip), "99", "-o", str(self.dir / "late.png")])
+
     def test_title_joins_with_clip(self):
         card = self.dir / "card.mp4"
         vedit.main(["title", "Hello 100%", "--seconds", "2", "--size", "320x240", "-o", str(card)])
