@@ -166,6 +166,31 @@ def cmd_rotate(a):
     run_ffmpeg(["-i", str(src), "-vf", ROTATE_FILTERS[a.degrees], "-c:a", "copy"], out, a.force)
 
 
+# ffmpeg overlay positions. W and H are the video size, w and h the logo size, M the margin.
+POSITIONS = {
+    "top-left": "M:M",
+    "top-right": "W-w-M:M",
+    "bottom-left": "M:H-h-M",
+    "bottom-right": "W-w-M:H-h-M",
+    "center": "(W-w)/2:(H-h)/2",
+}
+
+
+def cmd_watermark(a):
+    if a.width < 1 or a.margin < 0:
+        fail("width must be 1 or more and margin must be 0 or more")
+    src = check_input(a.input)
+    logo = check_input(a.image)
+    out = Path(a.output) if a.output else default_out(src, "mark")
+    pos = POSITIONS[a.position].replace("M", str(a.margin))
+    graph = f"[1:v]scale={a.width}:-1[wm];[0:v][wm]overlay={pos}[v]"
+    run_ffmpeg(
+        ["-i", str(src), "-i", str(logo), "-filter_complex", graph,
+         "-map", "[v]", "-map", "0:a?", "-c:a", "copy"],
+        out, a.force,
+    )
+
+
 def cmd_title(a):
     m = re.fullmatch(r"(\d+)x(\d+)", a.size)
     if not m or int(m[1]) % 2 or int(m[2]) % 2 or 0 in (int(m[1]), int(m[2])):
@@ -284,6 +309,13 @@ def build_parser():
     sp = add("rotate", cmd_rotate, "turn a clip clockwise")
     sp.add_argument("input")
     sp.add_argument("degrees", type=int, choices=sorted(ROTATE_FILTERS))
+
+    sp = add("watermark", cmd_watermark, "put a logo or image on a clip")
+    sp.add_argument("input")
+    sp.add_argument("image", help="logo file, for example a PNG with a clear background")
+    sp.add_argument("--position", choices=sorted(POSITIONS), default="bottom-right")
+    sp.add_argument("--width", type=int, default=100, help="width of the logo in pixels")
+    sp.add_argument("--margin", type=int, default=10, help="space to the edge in pixels")
     return p
 
 

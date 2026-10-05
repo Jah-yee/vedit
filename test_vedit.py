@@ -115,6 +115,27 @@ class VeditTest(unittest.TestCase):
         vedit.main(["rotate", str(self.clip), "90", "-o", str(out)])
         self.assertEqual(self.video_size(out), "240x320")
 
+    def is_red(self, video, x, y):
+        """Return True if the pixel at x, y in the first frame is red."""
+        frame = self.dir / "px.png"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-frames:v", "1", str(frame)], check=True)
+        test = f"%[fx:p{{{x},{y}}}.r>0.8&&p{{{x},{y}}}.g<0.3&&p{{{x},{y}}}.b<0.3]"
+        return subprocess.run(["magick", str(frame), "-format", test, "info:"],
+                              capture_output=True, text=True, check=True).stdout == "1"
+
+    def test_watermark(self):
+        logo = self.dir / "logo.png"
+        subprocess.run(["magick", "-size", "40x40", "xc:red", str(logo)], check=True)
+        top = self.dir / "wt.mp4"
+        vedit.main(["watermark", str(self.clip), str(logo), "--width", "40",
+                    "--position", "top-left", "-o", str(top)])
+        self.assertTrue(self.is_red(top, 20, 20))
+        self.assertEqual(streams(top), ["video", "audio"])
+        bottom = self.dir / "wb.mp4"
+        vedit.main(["watermark", str(self.clip), str(logo), "--width", "40", "-o", str(bottom)])
+        self.assertTrue(self.is_red(bottom, 290, 210))
+        self.assertFalse(self.is_red(bottom, 20, 20))
+
     def test_title_joins_with_clip(self):
         card = self.dir / "card.mp4"
         vedit.main(["title", "Hello 100%", "--seconds", "2", "--size", "320x240", "-o", str(card)])
