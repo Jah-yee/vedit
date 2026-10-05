@@ -144,6 +144,28 @@ def cmd_frame(a):
     run_ffmpeg(["-ss", a.time, "-i", str(src), "-frames:v", "1"], out, a.force)
 
 
+def cmd_resize(a):
+    if a.width is None and a.height is None:
+        fail("give --width or --height")
+    for value in (a.width, a.height):
+        # H.264 needs even sizes. The value -2 makes ffmpeg pick an even size for the other side.
+        if value is not None and (value <= 0 or value % 2):
+            fail("width and height must be even numbers above 0")
+    src = check_input(a.input)
+    out = Path(a.output) if a.output else default_out(src, "resized")
+    scale = f"scale={a.width or -2}:{a.height or -2}"
+    run_ffmpeg(["-i", str(src), "-vf", scale, "-c:a", "copy"], out, a.force)
+
+
+ROTATE_FILTERS = {90: "transpose=1", 180: "hflip,vflip", 270: "transpose=2"}
+
+
+def cmd_rotate(a):
+    src = check_input(a.input)
+    out = Path(a.output) if a.output else default_out(src, f"rot{a.degrees}")
+    run_ffmpeg(["-i", str(src), "-vf", ROTATE_FILTERS[a.degrees], "-c:a", "copy"], out, a.force)
+
+
 def cmd_title(a):
     m = re.fullmatch(r"(\d+)x(\d+)", a.size)
     if not m or int(m[1]) % 2 or int(m[2]) % 2 or 0 in (int(m[1]), int(m[2])):
@@ -253,6 +275,15 @@ def build_parser():
     sp = add("frame", cmd_frame, "save one frame of a clip as an image")
     sp.add_argument("input")
     sp.add_argument("time", help="time of the frame, for example 5 or 0:01:30")
+
+    sp = add("resize", cmd_resize, "change the size of a clip")
+    sp.add_argument("input")
+    sp.add_argument("--width", type=int, help="width in pixels, an even number")
+    sp.add_argument("--height", type=int, help="height in pixels, an even number")
+
+    sp = add("rotate", cmd_rotate, "turn a clip clockwise")
+    sp.add_argument("input")
+    sp.add_argument("degrees", type=int, choices=sorted(ROTATE_FILTERS))
     return p
 
 

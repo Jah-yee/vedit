@@ -90,6 +90,31 @@ class VeditTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             vedit.main(["frame", str(self.clip), "99", "-o", str(self.dir / "late.png")])
 
+    def video_size(self, path):
+        return subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+             "stream=width,height", "-of", "csv=p=0:s=x", str(path)],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+
+    def test_resize_width_only(self):
+        out = self.dir / "r.mp4"
+        vedit.main(["resize", str(self.clip), "--width", "160", "-o", str(out)])
+        self.assertEqual(self.video_size(out), "160x120")
+
+    def test_resize_odd_width(self):
+        with self.assertRaises(SystemExit):
+            vedit.main(["resize", str(self.clip), "--width", "161"])
+
+    def test_resize_needs_a_size(self):
+        with self.assertRaises(SystemExit):
+            vedit.main(["resize", str(self.clip)])
+
+    def test_rotate(self):
+        out = self.dir / "rot.mp4"
+        vedit.main(["rotate", str(self.clip), "90", "-o", str(out)])
+        self.assertEqual(self.video_size(out), "240x320")
+
     def test_title_joins_with_clip(self):
         card = self.dir / "card.mp4"
         vedit.main(["title", "Hello 100%", "--seconds", "2", "--size", "320x240", "-o", str(card)])
