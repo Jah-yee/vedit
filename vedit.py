@@ -55,19 +55,33 @@ def run_magick(tool, args, out, force):
         fail("ImageMagick failed")
 
 
-def video_duration(src):
-    """Return the length of a video in seconds."""
+def ffprobe(src, entries, fmt, stream="v:0"):
+    """Return the text that ffprobe prints for the entries of the first video or audio stream."""
     if shutil.which("ffprobe") is None:
         fail("ffprobe is not installed or not in PATH")
     r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=nw=1:nk=1", str(src)],
+        ["ffprobe", "-v", "error", "-select_streams", stream, "-show_entries", entries,
+         "-of", fmt, str(src)],
         capture_output=True, text=True,
     )
+    return r.stdout.strip()
+
+
+def video_duration(src):
+    """Return the length of a video in seconds."""
     try:
-        return float(r.stdout)
+        return float(ffprobe(src, "format=duration", "default=nw=1:nk=1"))
     except ValueError:
         fail(f"cannot read the length of {src}")
+
+
+def video_format(src):
+    """Return the width, the height, and the frame rate (for example 25/1) of a video."""
+    try:
+        width, height, fps = ffprobe(src, "stream=width,height,r_frame_rate", "csv=p=0").split(",")
+        return int(width), int(height), fps
+    except ValueError:
+        fail(f"cannot read the video stream of {src}")
 
 
 def cmd_trim(a):
@@ -83,15 +97,23 @@ def cmd_trim(a):
 def cmd_join(a):
     srcs = [check_input(p) for p in a.inputs]
     out = Path(a.output) if a.output else default_out(srcs[0], "joined")
-    # The concat list file needs a single quote written as '\''.
-    lines = [f"file '{str(p.resolve()).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'" for p in srcs]
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        f.write("\n".join(lines) + "\n")
-    try:
-        # ponytail: ffmpeg scales later clips to the size of the first clip, no crossfade
-        run_ffmpeg(["-f", "concat", "-safe", "0", "-i", f.name], out, a.force)
-    finally:
-        Path(f.name).unlink(missing_ok=True)
+    # Every clip gets the size and the frame rate of the first clip. Black bars keep the aspect ratio.
+    w, h, fps = video_format(srcs[0])
+    fit = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+           f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}")
+    # ponytail: no crossfade, and the output has no sound if one clip has no sound
+    with_audio = all(ffprobe(s, "stream=codec_type", "csv=p=0", "a:0") for s in srcs)
+    inputs, parts, labels = [], [], ""
+    for i, src in enumerate(srcs):
+        inputs += ["-i", str(src)]
+        parts.append(f"[{i}:v]{fit}[v{i}]")
+        labels += f"[v{i}]"
+        if with_audio:
+            parts.append(f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo[a{i}]")
+            labels += f"[a{i}]"
+    parts.append(f"{labels}concat=n={len(srcs)}:v=1:a={int(with_audio)}[v]" + ("[a]" if with_audio else ""))
+    maps = ["-map", "[v]"] + (["-map", "[a]"] if with_audio else [])
+    run_ffmpeg([*inputs, "-filter_complex", ";".join(parts), *maps], out, a.force)
 
 
 def cmd_speed(a):

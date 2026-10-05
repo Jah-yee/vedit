@@ -51,6 +51,28 @@ class VeditTest(unittest.TestCase):
         vedit.main(["join", str(self.clip), str(self.clip), "-o", str(out)])
         self.assertAlmostEqual(duration(out), 8, delta=0.3)
 
+    def test_join_clips_with_different_size_and_frame_rate(self):
+        big = self.dir / "big.mp4"
+        subprocess.run(
+            ["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x480:rate=30:duration=2",
+             "-f", "lavfi", "-i", "sine=duration=2", "-shortest", str(big)],
+            check=True,
+        )
+        out = self.dir / "jd.mp4"
+        vedit.main(["join", str(self.clip), str(big), "-o", str(out)])
+        self.assertEqual(vedit.video_format(out)[:2], (320, 240))
+        # The video stream and the audio stream must both be about 6 seconds long.
+        self.assertAlmostEqual(duration(out), 6, delta=0.3)
+        self.assertAlmostEqual(float(vedit.ffprobe(out, "stream=duration", "csv=p=0")), 6, delta=0.3)
+
+    def test_join_with_a_clip_that_has_no_sound(self):
+        silent = self.dir / "silent.mp4"
+        vedit.main(["mute", str(self.clip), "-o", str(silent)])
+        out = self.dir / "js.mp4"
+        vedit.main(["join", str(self.clip), str(silent), "-o", str(out)])
+        self.assertEqual(streams(out), ["video"])
+        self.assertAlmostEqual(duration(out), 8, delta=0.3)
+
     def test_speed(self):
         out = self.dir / "s.mp4"
         vedit.main(["speed", str(self.clip), "2", "-o", str(out)])
