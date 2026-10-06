@@ -176,6 +176,11 @@ class VeditTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             vedit.main(["title", "x", "--size", "321x240"])
 
+
+    def test_title_empty_text(self):
+        with self.assertRaises(SystemExit):
+            vedit.main(["title", "", "--size", "320x240"])
+
     def test_sheet(self):
         out = self.dir / "sheet.png"
         vedit.main(["sheet", str(self.clip), "--cols", "3", "--rows", "2", "--width", "100", "-o", str(out)])
